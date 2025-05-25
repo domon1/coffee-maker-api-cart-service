@@ -1,29 +1,32 @@
 package com.komarov.coffee_maker.cart_service.service.impl;
 
 import com.komarov.coffee_maker.cart_service.model.CartItem;
-import com.komarov.coffee_maker.cart_service.model.CartItemIngredient;
+import com.komarov.coffee_maker.cart_service.model.DTO.CartDTO;
+import com.komarov.coffee_maker.cart_service.model.DTO.view.CartItemViewDTO;
+import com.komarov.coffee_maker.cart_service.model.DTO.view.CartViewDTO;
 import com.komarov.coffee_maker.cart_service.model.UserCart;
-import com.komarov.coffee_maker.cart_service.repository.CartItemIngredientRepository;
-import com.komarov.coffee_maker.cart_service.repository.CartItemRepository;
 import com.komarov.coffee_maker.cart_service.repository.UserCartRepository;
+import com.komarov.coffee_maker.cart_service.service.CartItemIngredientService;
+import com.komarov.coffee_maker.cart_service.service.CartItemService;
 import com.komarov.coffee_maker.cart_service.service.UserCartService;
 import org.springframework.stereotype.Service;
 
-import java.util.HashSet;
+import java.math.BigDecimal;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 @Service
 public class UserCartServiceImpl implements UserCartService {
     final UserCartRepository cartRepository;
-    final CartItemIngredientRepository ingredientRepository;
-    final CartItemRepository itemRepository;
+    final CartItemService itemService;
+    final CartItemIngredientService ingredientService;
 
-    public UserCartServiceImpl(UserCartRepository cartRepository, CartItemIngredientRepository ingredientRepository, CartItemRepository itemRepository) {
+
+
+    public UserCartServiceImpl(UserCartRepository cartRepository, CartItemService itemService, CartItemIngredientService ingredientService) {
         this.cartRepository = cartRepository;
-        this.ingredientRepository = ingredientRepository;
-        this.itemRepository = itemRepository;
+        this.itemService = itemService;
+        this.ingredientService = ingredientService;
     }
 
     private UserCart createCart(Long userId) {
@@ -33,11 +36,20 @@ public class UserCartServiceImpl implements UserCartService {
         return cartRepository.save(cart);
     }
 
+    @Override
+    public CartDTO findCartDTOByUserId(Long userId) {
+        UserCart cart =  cartRepository.findFirstByUserId(userId)
+                .orElseGet(() -> createCart(userId));
+        return CartDTO.from(cart);
+    }
+
+    @Override
     public UserCart findCartByUserId(Long userId) {
         return cartRepository.findFirstByUserId(userId)
                 .orElseGet(() -> createCart(userId));
     }
 
+    @Override
     public void removeFromCart(Long userId, Long itemId) {
         UserCart cart = findCartByUserId(userId);
         cart.getCartItems().removeIf(item -> item.getId().equals(itemId));
@@ -47,69 +59,46 @@ public class UserCartServiceImpl implements UserCartService {
     @Override
     public void changeQuantity(Long userId, boolean isInk, Long itemId) {
         UserCart cart = findCartByUserId(userId);
-        for (CartItem item : cart.getCartItems()){
-            if (item.getId().equals(itemId)){
-                item.setQuantity(isInk ? item.getQuantity() + 1: item.getQuantity() - 1);
+        for (CartItem item : cart.getCartItems()) {
+            if (item.getId().equals(itemId)) {
+                item.setQuantity(isInk ? item.getQuantity() + 1 : item.getQuantity() - 1);
             }
         }
         cartRepository.save(cart);
     }
 
     @Override
-    public void changeCartItem(Long userId, CartItem cartItem) {
-        UserCart cart = findCartByUserId(userId);
-        for (CartItem item : cart.getCartItems()){
-            if (item.getId().equals(cartItem.getId())){
-                cart.getCartItems().remove(item);
-
-
-
-                cart.getCartItems().add(cartItem);
-            }
-        }
-        cartRepository.save(cart);
-    }
-
     public void addToCart(Long userId, CartItem cartItem) {
         UserCart cart = findCartByUserId(userId);
-        cartItem.setUserCart(cart);
 
-        for (CartItem item : cart.getCartItems()) {
-            if (Objects.equals(cartItem.getItemId(), item.getItemId())) {
-                List<Long> presentIngredients = cartItem.getIngredients().stream()
-                        .map(CartItemIngredient::getIngredientId).toList();
-                List<Long> currentIngredients = item.getIngredients().stream()
-                        .map(CartItemIngredient::getIngredientId).toList();
-                if (Objects.equals(presentIngredients, currentIngredients)) {
-                    item.setQuantity(item.getQuantity() + 1);
-                    cartRepository.save(cart);
-                    return;
-                }
-            }
-        }
+        if (itemService.isExistItem(cart.getCartItems(), cartItem)) return;
 
-        Set<CartItemIngredient> ingredients = new HashSet<>();
-        for (CartItemIngredient ingredient : cartItem.getIngredients()) {
-            ingredients.add(ingredientRepository.save(ingredient));
-        }
-
-        CartItem item = new CartItem();
-        item.setItemId(cartItem.getItemId());
-        item.setQuantity(cartItem.getQuantity());
-        item.setIngredients(ingredients);
-        item.setUserCart(cart);
-        item = itemRepository.save(item);
-
-        for (CartItemIngredient ingredient : ingredients) {
-            ingredient.setCartItem(item);
-            ingredientRepository.save(ingredient);
-        }
-
-        cart.getCartItems().add(itemRepository.save(item));
-        cartRepository.save(cart);
+        itemService.createCartItem(cart, cartItem);
     }
 
+    @Override
     public void clearCart(Long userId) {
         cartRepository.delete(findCartByUserId(userId));
+    }
+
+    @Override
+    public CartViewDTO findCartViewDTO(Long userId) {
+        UserCart cart = findCartByUserId(userId);
+        List<CartItemViewDTO> itemDTOList = itemService.findItemDTOsById(cart.getCartItems());
+
+        return new CartViewDTO(
+                cart.getUserId(),
+                calculatePrice(itemDTOList.stream().map(CartItemViewDTO::totalPrice).toList()),
+                itemDTOList
+        );
+    }
+
+    private BigDecimal calculatePrice(List<BigDecimal> item) {
+        BigDecimal totalPrice = BigDecimal.ZERO;
+        for (BigDecimal price : item) {
+            totalPrice = totalPrice.add(price);
+        }
+
+        return totalPrice;
     }
 }

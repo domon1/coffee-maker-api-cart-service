@@ -1,7 +1,8 @@
 package com.komarov.coffee_maker.cart_service.controller;
 
 import com.komarov.coffee_maker.cart_service.model.CartItem;
-import com.komarov.coffee_maker.cart_service.model.UserCart;
+import com.komarov.coffee_maker.cart_service.model.DTO.CartDTO;
+import com.komarov.coffee_maker.cart_service.model.DTO.view.CartViewDTO;
 import com.komarov.coffee_maker.cart_service.service.impl.UserCartServiceImpl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,37 +18,36 @@ public class UserCartController {
     }
 
     @GetMapping(path = "/{userId}")
-    public ResponseEntity<UserCart> findCartByUserId(@PathVariable Long userId) {
-        return ResponseEntity.ok(userCartService.findCartByUserId(userId));
+    public ResponseEntity<CartDTO> findCartByUserId(@PathVariable Long userId) {
+        return ResponseEntity.ok(userCartService.findCartDTOByUserId(userId));
     }
 
-    @PostMapping(path = "/add/{userId}")
+    @GetMapping(path = "/view/{userId}")
+    public ResponseEntity<CartViewDTO> findCartViewByUserId(@PathVariable Long userId) {
+        return ResponseEntity.ok(userCartService.findCartViewDTO(userId));
+    }
+
+    @PutMapping(path = "/add/{userId}")
     public ResponseEntity<?> addToCart(@PathVariable Long userId, @RequestBody CartItem cartItem) {
         userCartService.addToCart(userId, cartItem);
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping(path = "/{userId}/remove/{itemId}")
-    public ResponseEntity<?> addToCart(@PathVariable Long userId, @PathVariable Long itemId) {
+    @PutMapping(path = "/{userId}/remove/{itemId}")
+    public ResponseEntity<?> removeFromCart(@PathVariable Long userId, @PathVariable Long itemId) {
         userCartService.removeFromCart(userId, itemId);
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping(path = "/clear/{userId}")
+    @DeleteMapping(path = "/clear/{userId}")
     public ResponseEntity<?> clearCart(@PathVariable Long userId) {
         userCartService.clearCart(userId);
         return ResponseEntity.ok().build();
     }
 
-    @GetMapping(path = "/quantity/{userId}/{itemId}")
-    public ResponseEntity<UserCart> changeQuantity(@PathVariable Long userId, @PathVariable Long itemId) {
-        userCartService.changeQuantity(userId, true, itemId);
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping(path = "/change/{userId}")
-    public ResponseEntity<?> changeCartItem(@PathVariable Long userId, @RequestBody CartItem cartItem) {
-        userCartService.changeCartItem(userId, cartItem);
+    @GetMapping(path = "/{userId}/item/{itemId}/quantity/{isInk}")
+    public ResponseEntity<?> changeQuantity(@PathVariable Long userId, @PathVariable Long itemId, @PathVariable Boolean isInk) {
+        userCartService.changeQuantity(userId, isInk, itemId);
         return ResponseEntity.ok().build();
     }
 }
